@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Habitual — Your Daily Streak Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,500;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       AUTH PAGE (Login / Register)
+  ═══════════════════════════════════════════ -->
+  <div id="auth-page" class="page active">
+    <div class="auth-bg">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+
+    <div class="auth-container">
+      <!-- Brand -->
+      <div class="brand">
+        <div class="brand-icon">🌿</div>
+        <h1 class="brand-name">Habitual</h1>
+        <p class="brand-tagline">Small steps. Big streaks.</p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button class="tab-btn active" data-tab="login">Sign In</button>
+        <button class="tab-btn" data-tab="register">Register</button>
+      </div>
+
+      <!-- Login Form -->
+      <div id="login-form" class="auth-form active">
+        <div class="field-group">
+          <label>Username</label>
+          <input type="text" id="login-username" placeholder="your name..." autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" />
+        </div>
+        <p class="auth-error" id="login-error"></p>
+        <button class="btn-primary" id="login-btn">Welcome Back →</button>
+        <p class="auth-hint">Demo: use any username + password you registered with.</p>
+      </div>
+
+      <!-- Register Form -->
+      <div id="register-form" class="auth-form">
+        <div class="field-group">
+          <label>Choose a Username</label>
+          <input type="text" id="reg-username" placeholder="your name..." autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label>Create a Password</label>
+          <input type="password" id="reg-password" placeholder="••••••••" />
+        </div>
+        <div class="field-group">
+          <label>Confirm Password</label>
+          <input type="password" id="reg-confirm" placeholder="••••••••" />
+        </div>
+        <p class="auth-error" id="reg-error"></p>
+        <button class="btn-primary" id="register-btn">Start My Journey →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       DASHBOARD PAGE
+  ═══════════════════════════════════════════ -->
+  <div id="dashboard-page" class="page">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon-sm">🌿</span>
+        <span>Habitual</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-link active" href="#">
+          <span class="nav-icon">◈</span> Today
+        </a>
+        <a class="nav-link" href="#" id="show-stats-link">
+          <span class="nav-icon">◉</span> Stats
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-chip" id="sidebar-user"></div>
+        <button class="logout-btn" id="logout-btn">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Mobile Top Bar -->
+    <header class="mobile-header">
+      <div class="brand-icon-sm">🌿</div>
+      <span class="mobile-title">Habitual</span>
+      <button class="logout-btn-sm" id="logout-btn-mobile">↩</button>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- Header Row -->
+      <div class="content-header">
+        <div>
+          <h2 class="greeting" id="greeting-text">Good morning ☀️</h2>
+          <p class="date-label" id="today-date"></p>
+        </div>
+        <div class="summary-chip">
+          <span id="completed-count">0</span> / <span id="total-count">0</span>
+          <span class="summary-label">done today</span>
+        </div>
+      </div>
+
+      <!-- Overall Progress Bar -->
+      <div class="overall-progress-wrap">
+        <div class="overall-progress-track">
+          <div class="overall-progress-fill" id="overall-bar"></div>
+        </div>
+        <span class="progress-pct" id="progress-pct">0%</span>
+      </div>
+
+      <!-- Last 7 Days Legend -->
+      <div class="week-legend">
+        <span id="week-days-header"></span>
+      </div>
+
+      <!-- Habit List -->
+      <div class="habits-grid" id="habits-grid">
+        <!-- Habit cards inserted by JS -->
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-state" id="empty-state" style="display:none;">
+        <div class="empty-icon">🌱</div>
+        <h3>No habits yet</h3>
+        <p>Add your first habit below and start building your streak!</p>
+      </div>
+
+      <!-- Add Habit Card -->
+      <div class="add-habit-card" id="add-habit-card">
+        <button class="add-trigger" id="add-trigger-btn">
+          <span class="plus-icon">＋</span> Add a new habit
+        </button>
+        <div class="add-form" id="add-form" style="display:none;">
+          <div class="add-form-row">
+            <div class="emoji-picker-wrap">
+              <button class="emoji-btn" id="emoji-btn">🏃</button>
+              <div class="emoji-dropdown" id="emoji-dropdown">
+                <span class="ep-option" data-emoji="🏃">🏃</span>
+                <span class="ep-option" data-emoji="📚">📚</span>
+                <span class="ep-option" data-emoji="💧">💧</span>
+                <span class="ep-option" data-emoji="🧘">🧘</span>
+                <span class="ep-option" data-emoji="🎨">🎨</span>
+                <span class="ep-option" data-emoji="🎸">🎸</span>
+                <span class="ep-option" data-emoji="🏋️">🏋️</span>
+                <span class="ep-option" data-emoji="🌙">🌙</span>
+                <span class="ep-option" data-emoji="✍️">✍️</span>
+                <span class="ep-option" data-emoji="🥗">🥗</span>
+                <span class="ep-option" data-emoji="🚴">🚴</span>
+                <span class="ep-option" data-emoji="🧹">🧹</span>
+              </div>
+            </div>
+            <input type="text" id="new-habit-name" placeholder="Name your habit..." maxlength="40" />
+            <button class="btn-add-confirm" id="add-confirm-btn">Add</button>
+            <button class="btn-cancel" id="add-cancel-btn">✕</button>
+          </div>
+          <p class="add-error" id="add-error"></p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       DELETE CONFIRMATION MODAL
+  ═══════════════════════════════════════════ -->
+  <div class="modal-overlay" id="delete-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-icon">🗑️</div>
+      <h3>Delete habit?</h3>
+      <p>This will remove the habit and its entire streak history.</p>
+      <div class="modal-actions">
+        <button class="btn-cancel-modal" id="modal-cancel">Keep it</button>
+        <button class="btn-delete-modal" id="modal-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
