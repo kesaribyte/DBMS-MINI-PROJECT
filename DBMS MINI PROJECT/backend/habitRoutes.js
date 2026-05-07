@@ -4,7 +4,7 @@
 
 const express = require("express");
 const router  = express.Router();
-const { addHabit, getHabitsByUser, deleteHabit } = require("../controllers/habitController");
+const { addHabit, getHabitsByUser, deleteHabit } = require("./habitController");
 
 // POST   /habits             — create a habit
 router.post("/habits", addHabit);

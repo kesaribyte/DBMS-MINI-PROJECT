@@ -1,555 +1,863 @@
 /* ══════════════════════════════════════════════════
-   HABITUAL — app.js
-   All logic: Auth, Habit CRUD, Streaks, UI updates
+   HABITUAL — Backend Connected app.js
+   FINAL WORKING VERSION
 ══════════════════════════════════════════════════ */
 
 "use strict";
 
-// ─── Helpers ────────────────────────────────────
+// ────────────────────────────────────────────────
+// API
+// ────────────────────────────────────────────────
 
-/** Today's date as "YYYY-MM-DD" string */
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
+const API_URL = "http://localhost:3000";
 
-/** Last N dates as ["YYYY-MM-DD", ...], oldest first */
-function lastNDates(n) {
-  const dates = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
-  }
-  return dates;
-}
+// ────────────────────────────────────────────────
+// HELPERS
+// ────────────────────────────────────────────────
 
-/** Short weekday label: "Mon", "Tue", … */
-function shortDay(dateStr) {
-  return new Date(dateStr).toLocaleDateString("en-US", { weekday: "short" });
-}
-
-/** Greeting based on hour */
 function getGreeting() {
+
   const h = new Date().getHours();
+
   if (h < 12) return "Good morning ☀️";
+
   if (h < 17) return "Good afternoon 🌤";
+
   return "Good evening 🌙";
 }
 
-/** Unique ID */
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function escHtml(str) {
+
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
 }
 
-// ─── Storage Keys ────────────────────────────────
+// ────────────────────────────────────────────────
+// SESSION
+// ────────────────────────────────────────────────
 
-const USERS_KEY   = "habitual_users";       // { username: hashedPwd }
-const SESSION_KEY = "habitual_session";     // currently logged-in username
-const HABITS_KEY  = (user) => `habitual_habits_${user}`;
+function setSession(user) {
 
-// ─── Auth Storage ────────────────────────────────
+  localStorage.setItem(
+    "habitual_user",
+    JSON.stringify(user)
+  );
 
-function getUsers() {
-  return JSON.parse(localStorage.getItem(USERS_KEY) || "{}");
 }
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
+
 function currentUser() {
-  return localStorage.getItem(SESSION_KEY) || null;
+
+  return JSON.parse(
+    localStorage.getItem(
+      "habitual_user"
+    )
+  );
+
 }
-function setSession(username) {
-  localStorage.setItem(SESSION_KEY, username);
-}
+
 function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+
+  localStorage.removeItem(
+    "habitual_user"
+  );
+
 }
 
-// Very simple "hash" — not cryptographic, just for demo purposes
-function simpleHash(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  }
-  return h.toString(16);
-}
+// ────────────────────────────────────────────────
+// DOM
+// ────────────────────────────────────────────────
 
-// ─── Habit Storage ───────────────────────────────
+const authPage =
+  document.getElementById("auth-page");
 
-/**
- * Habit object shape:
- * {
- *   id:       string,
- *   name:     string,
- *   emoji:    string,
- *   history:  { "YYYY-MM-DD": true, ... },
- *   streak:   number,
- *   createdAt: string
- * }
- */
-function getHabits(user) {
-  return JSON.parse(localStorage.getItem(HABITS_KEY(user)) || "[]");
-}
-function saveHabits(user, habits) {
-  localStorage.setItem(HABITS_KEY(user), JSON.stringify(habits));
-}
+const dashPage =
+  document.getElementById("dashboard-page");
 
-/** Recalculate streak for a habit based on its history */
-function calcStreak(history) {
-  let streak = 0;
-  const today = todayStr();
-  // Walk backwards from today
-  let check = new Date();
-  // If today not done, streak counts from yesterday back
-  if (!history[today]) {
-    check.setDate(check.getDate() - 1);
-  }
-  while (true) {
-    const ds = check.toISOString().slice(0, 10);
-    if (history[ds]) {
-      streak++;
-      check.setDate(check.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
+const tabBtns =
+  document.querySelectorAll(".tab-btn");
 
-/** Mark a habit done for today; returns updated habit */
-function markDone(habit) {
-  const today = todayStr();
-  habit.history[today] = true;
-  habit.streak = calcStreak(habit.history);
-  return habit;
-}
+const loginForm =
+  document.getElementById("login-form");
 
-// ─── DOM References ──────────────────────────────
+const registerForm =
+  document.getElementById("register-form");
 
-const authPage      = document.getElementById("auth-page");
-const dashPage      = document.getElementById("dashboard-page");
+const loginBtn =
+  document.getElementById("login-btn");
 
-// Auth
-const tabBtns       = document.querySelectorAll(".tab-btn");
-const loginForm     = document.getElementById("login-form");
-const registerForm  = document.getElementById("register-form");
-const loginUsernameEl = document.getElementById("login-username");
-const loginPasswordEl = document.getElementById("login-password");
-const loginError    = document.getElementById("login-error");
-const loginBtn      = document.getElementById("login-btn");
-const regUsername   = document.getElementById("reg-username");
-const regPassword   = document.getElementById("reg-password");
-const regConfirm    = document.getElementById("reg-confirm");
-const regError      = document.getElementById("reg-error");
-const registerBtn   = document.getElementById("register-btn");
+const registerBtn =
+  document.getElementById("register-btn");
 
-// Dashboard
-const greetingText  = document.getElementById("greeting-text");
-const todayDateEl   = document.getElementById("today-date");
-const habitsGrid    = document.getElementById("habits-grid");
-const emptyState    = document.getElementById("empty-state");
-const completedCount = document.getElementById("completed-count");
-const totalCount    = document.getElementById("total-count");
-const overallBar    = document.getElementById("overall-bar");
-const progressPct   = document.getElementById("progress-pct");
-const sidebarUser   = document.getElementById("sidebar-user");
-const logoutBtn     = document.getElementById("logout-btn");
-const logoutBtnMob  = document.getElementById("logout-btn-mobile");
+const loginUsername =
+  document.getElementById("login-username");
 
-// Add habit
-const addTriggerBtn = document.getElementById("add-trigger-btn");
-const addForm       = document.getElementById("add-form");
-const addConfirmBtn = document.getElementById("add-confirm-btn");
-const addCancelBtn  = document.getElementById("add-cancel-btn");
-const newHabitName  = document.getElementById("new-habit-name");
-const addError      = document.getElementById("add-error");
-const emojiBtn      = document.getElementById("emoji-btn");
-const emojiDropdown = document.getElementById("emoji-dropdown");
-let selectedEmoji   = "🏃";
+const loginPassword =
+  document.getElementById("login-password");
 
-// Delete modal
-const deleteModal   = document.getElementById("delete-modal");
-const modalCancel   = document.getElementById("modal-cancel");
-const modalConfirm  = document.getElementById("modal-confirm");
+const regUsername =
+  document.getElementById("reg-username");
+
+const regPassword =
+  document.getElementById("reg-password");
+
+const regConfirm =
+  document.getElementById("reg-confirm");
+
+const loginError =
+  document.getElementById("login-error");
+
+const regError =
+  document.getElementById("reg-error");
+
+const greetingText =
+  document.getElementById("greeting-text");
+
+const todayDate =
+  document.getElementById("today-date");
+
+const habitsGrid =
+  document.getElementById("habits-grid");
+
+const emptyState =
+  document.getElementById("empty-state");
+
+const completedCount =
+  document.getElementById("completed-count");
+
+const totalCount =
+  document.getElementById("total-count");
+
+const overallBar =
+  document.getElementById("overall-bar");
+
+const progressPct =
+  document.getElementById("progress-pct");
+
+const sidebarUser =
+  document.getElementById("sidebar-user");
+
+const logoutBtn =
+  document.getElementById("logout-btn");
+
+const logoutBtnMobile =
+  document.getElementById("logout-btn-mobile");
+
+// ADD HABIT
+const addTriggerBtn =
+  document.getElementById("add-trigger-btn");
+
+const addForm =
+  document.getElementById("add-form");
+
+const addConfirmBtn =
+  document.getElementById("add-confirm-btn");
+
+const addCancelBtn =
+  document.getElementById("add-cancel-btn");
+
+const newHabitName =
+  document.getElementById("new-habit-name");
+
+const addError =
+  document.getElementById("add-error");
+
+// DELETE MODAL
+const deleteModal =
+  document.getElementById("delete-modal");
+
+const modalCancel =
+  document.getElementById("modal-cancel");
+
+const modalConfirm =
+  document.getElementById("modal-confirm");
+
 let pendingDeleteId = null;
 
-// ─── Page Switching ──────────────────────────────
+// ────────────────────────────────────────────────
+// PAGE SWITCH
+// ────────────────────────────────────────────────
 
 function showPage(page) {
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+
+  document
+    .querySelectorAll(".page")
+    .forEach(p =>
+      p.classList.remove("active")
+    );
+
   page.classList.add("active");
+
 }
 
-// ─── Auth Logic ──────────────────────────────────
+// ────────────────────────────────────────────────
+// TABS
+// ────────────────────────────────────────────────
 
-// Tab switching
 tabBtns.forEach(btn => {
+
   btn.addEventListener("click", () => {
-    tabBtns.forEach(b => b.classList.remove("active"));
+
+    tabBtns.forEach(b =>
+      b.classList.remove("active")
+    );
+
     btn.classList.add("active");
-    const target = btn.dataset.tab;
-    loginForm.classList.remove("active");
-    registerForm.classList.remove("active");
-    document.getElementById(`${target}-form`).classList.add("active");
-    loginError.textContent = "";
-    regError.textContent = "";
+
+    const target =
+      btn.dataset.tab;
+
+    loginForm.classList.remove(
+      "active"
+    );
+
+    registerForm.classList.remove(
+      "active"
+    );
+
+    document
+      .getElementById(
+        `${target}-form`
+      )
+      .classList.add("active");
+
   });
+
 });
 
-// Login
-loginBtn.addEventListener("click", () => {
-  const username = loginUsernameEl.value.trim();
-  const password = loginPasswordEl.value;
+// ────────────────────────────────────────────────
+// REGISTER
+// ────────────────────────────────────────────────
 
-  if (!username || !password) {
-    loginError.textContent = "Please fill in both fields.";
-    return;
+registerBtn.addEventListener(
+  "click",
+  async () => {
+
+    const username =
+      regUsername.value.trim();
+
+    const password =
+      regPassword.value;
+
+    const confirm =
+      regConfirm.value;
+
+    regError.textContent = "";
+
+    if (
+      !username ||
+      !password ||
+      !confirm
+    ) {
+
+      regError.textContent =
+        "Please fill all fields";
+
+      return;
+    }
+
+    if (password !== confirm) {
+
+      regError.textContent =
+        "Passwords do not match";
+
+      return;
+    }
+
+    try {
+
+      const response =
+        await fetch(
+          `${API_URL}/register`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body: JSON.stringify({
+
+              name: username,
+
+              email:
+                `${username}@gmail.com`,
+
+              password: password
+
+            })
+
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!data.success) {
+
+        regError.textContent =
+          data.error || "Failed";
+
+        return;
+      }
+
+      setSession(data.data);
+
+      initDashboard();
+
+    } catch (err) {
+
+      console.error(err);
+
+      regError.textContent =
+        "Server error";
+
+    }
+
   }
-
-  const users = getUsers();
-  if (!users[username]) {
-    loginError.textContent = "No account found. Please register first.";
-    return;
-  }
-  if (users[username] !== simpleHash(password)) {
-    loginError.textContent = "Incorrect password. Try again.";
-    return;
-  }
-
-  setSession(username);
-  loginError.textContent = "";
-  loginUsernameEl.value = "";
-  loginPasswordEl.value = "";
-  initDashboard();
-});
-
-// Register
-registerBtn.addEventListener("click", () => {
-  const username = regUsername.value.trim();
-  const password = regPassword.value;
-  const confirm  = regConfirm.value;
-
-  if (!username || !password || !confirm) {
-    regError.textContent = "Please fill in all fields.";
-    return;
-  }
-  if (username.length < 2) {
-    regError.textContent = "Username must be at least 2 characters.";
-    return;
-  }
-  if (password.length < 4) {
-    regError.textContent = "Password must be at least 4 characters.";
-    return;
-  }
-  if (password !== confirm) {
-    regError.textContent = "Passwords do not match.";
-    return;
-  }
-
-  const users = getUsers();
-  if (users[username]) {
-    regError.textContent = "Username already taken. Try another.";
-    return;
-  }
-
-  users[username] = simpleHash(password);
-  saveUsers(users);
-
-  // Seed default habits for new user
-  const defaultHabits = [
-    { id: uid(), name: "Morning Run",   emoji: "🏃", history: {}, streak: 0, createdAt: todayStr() },
-    { id: uid(), name: "Read 20 pages", emoji: "📚", history: {}, streak: 0, createdAt: todayStr() },
-    { id: uid(), name: "Drink Water",   emoji: "💧", history: {}, streak: 0, createdAt: todayStr() },
-  ];
-  saveHabits(username, defaultHabits);
-
-  setSession(username);
-  regError.textContent = "";
-  regUsername.value = "";
-  regPassword.value = "";
-  regConfirm.value = "";
-  initDashboard();
-});
-
-// Logout
-function logout() {
-  clearSession();
-  showPage(authPage);
-}
-logoutBtn.addEventListener("click", logout);
-logoutBtnMob.addEventListener("click", logout);
-
-// Enter key on auth inputs
-[loginUsernameEl, loginPasswordEl].forEach(el =>
-  el.addEventListener("keydown", e => { if (e.key === "Enter") loginBtn.click(); })
 );
-[regUsername, regPassword, regConfirm].forEach(el =>
-  el.addEventListener("keydown", e => { if (e.key === "Enter") registerBtn.click(); })
+
+// ────────────────────────────────────────────────
+// LOGIN
+// ────────────────────────────────────────────────
+
+loginBtn.addEventListener(
+  "click",
+  async () => {
+
+    const username =
+      loginUsername.value.trim();
+
+    if (!username) {
+
+      loginError.textContent =
+        "Enter username";
+
+      return;
+    }
+
+    try {
+
+      const response =
+        await fetch(
+          `${API_URL}/users`
+        );
+
+      const data =
+        await response.json();
+
+      const user =
+        data.data.find(
+          u =>
+            u.name === username
+        );
+
+      if (!user) {
+
+        loginError.textContent =
+          "User not found";
+
+        return;
+      }
+
+      setSession(user);
+
+      initDashboard();
+
+    } catch (err) {
+
+      console.error(err);
+
+      loginError.textContent =
+        "Server error";
+
+    }
+
+  }
 );
 
-// ─── Dashboard Init ──────────────────────────────
+// ────────────────────────────────────────────────
+// DASHBOARD
+// ────────────────────────────────────────────────
 
 function initDashboard() {
-  const user = currentUser();
-  if (!user) { showPage(authPage); return; }
 
-  // Meta
-  greetingText.textContent = getGreeting();
-  todayDateEl.textContent  = new Date().toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric"
-  });
-  sidebarUser.textContent = `👤 ${user}`;
+  const user =
+    currentUser();
+
+  if (!user) {
+
+    showPage(authPage);
+
+    return;
+  }
+
+  greetingText.textContent =
+    getGreeting();
+
+  todayDate.textContent =
+    new Date().toLocaleDateString(
+      "en-US",
+      {
+        weekday: "long",
+        month: "long",
+        day: "numeric"
+      }
+    );
+
+  sidebarUser.textContent =
+    `👤 ${user.name}`;
 
   showPage(dashPage);
-  renderHabits();
+
+  loadHabits();
+
 }
 
-// ─── Render Habits ───────────────────────────────
+// ────────────────────────────────────────────────
+// LOAD HABITS
+// ────────────────────────────────────────────────
 
-function renderHabits() {
-  const user   = currentUser();
-  const habits = getHabits(user);
-  const today  = todayStr();
-  const days   = lastNDates(7);
+async function loadHabits() {
+
+  const user =
+    currentUser();
+
+  if (!user) return;
+
+  try {
+
+    const response =
+      await fetch(
+        `${API_URL}/habits/${user.user_id}`
+      );
+
+    const result =
+      await response.json();
+
+    renderHabits(
+      result.data || []
+    );
+
+  } catch (err) {
+
+    console.error(err);
+
+  }
+
+}
+
+// ────────────────────────────────────────────────
+// RENDER HABITS
+// ────────────────────────────────────────────────
+
+function renderHabits(habits) {
 
   habitsGrid.innerHTML = "";
 
+  const total =
+    habits.length;
+
+  let completed =
+    habits.filter(
+      h => h.done_today
+    ).length;
+
+  totalCount.textContent =
+    total;
+
+  completedCount.textContent =
+    completed;
+
+  const pct =
+    total > 0
+      ? Math.round(
+          (
+            completed / total
+          ) * 100
+        )
+      : 0;
+
+  overallBar.style.width =
+    `${pct}%`;
+
+  progressPct.textContent =
+    `${pct}%`;
+
   if (habits.length === 0) {
-    emptyState.style.display = "block";
-  } else {
-    emptyState.style.display = "none";
+
+    emptyState.style.display =
+      "block";
+
+    return;
   }
 
-  habits.forEach((habit, idx) => {
-    const isDone = !!habit.history[today];
-    const card   = createHabitCard(habit, isDone, days, idx);
-    habitsGrid.appendChild(card);
-  });
+  emptyState.style.display =
+    "none";
 
-  updateSummary(habits, today);
-}
+  habits.forEach(habit => {
 
-/** Build a single habit card DOM element */
-function createHabitCard(habit, isDone, weekDays, idx) {
-  const card = document.createElement("div");
-  card.className = `habit-card ${isDone ? "done" : ""}`;
-  card.dataset.id = habit.id;
-  card.style.animationDelay = `${idx * 60}ms`;
+    const card =
+      document.createElement("div");
 
-  // Progress: streak / 30 days as a simple bar metric
-  const barPct = Math.min(100, (habit.streak / 30) * 100).toFixed(0);
+    card.className =
+      `habit-card ${
+        habit.done_today
+          ? "done"
+          : ""
+      }`;
 
-  // 7-day dots HTML
-  const dotsHTML = weekDays.map(d => {
-    const isToday   = d === todayStr();
-    const completed = !!habit.history[d];
-    return `<div class="week-dot ${completed ? "filled" : ""} ${isToday ? "today-dot" : ""}" title="${shortDay(d)}"></div>`;
-  }).join("");
+    card.dataset.id =
+      habit.habit_id;
 
-  card.innerHTML = `
-    <div class="habit-top">
-      <!-- Emoji icon -->
-      <div class="habit-emoji">${habit.emoji}</div>
+    card.innerHTML = `
 
-      <!-- Name + streak -->
-      <div class="habit-info">
-        <div class="habit-name">${escHtml(habit.name)}</div>
-        <div class="habit-streak ${habit.streak === 0 ? "streak-zero" : ""}">
-          <span class="streak-fire">🔥</span>
-          <span class="streak-number">${habit.streak}</span>
-          <span>${habit.streak === 1 ? "day streak" : "day streak"}</span>
+      <div class="habit-top">
+
+        <div class="habit-emoji">
+          ${habit.emoji || "🌿"}
         </div>
+
+        <div class="habit-info">
+
+          <div class="habit-name">
+            ${escHtml(
+              habit.habit_name
+            )}
+          </div>
+
+          <div class="habit-streak">
+
+            🔥
+
+            <span class="streak-number">
+              ${habit.streak || 0}
+            </span>
+
+            day streak
+
+          </div>
+
+        </div>
+
+        <div class="habit-actions">
+
+          <button
+            class="btn-done ${
+              habit.done_today
+                ? "completed"
+                : ""
+            }"
+          >
+
+            ${
+              habit.done_today
+                ? "✓ Done"
+                : "Mark Done"
+            }
+
+          </button>
+
+          <button
+            class="btn-delete"
+          >
+            🗑
+          </button>
+
+        </div>
+
       </div>
 
-      <!-- Buttons -->
-      <div class="habit-actions">
-        <button class="btn-done ${isDone ? "completed" : ""}" data-id="${habit.id}">
-          ${isDone ? "✓ Done" : "Mark Done"}
-        </button>
-        <button class="btn-delete" data-id="${habit.id}" title="Delete habit">🗑</button>
-      </div>
-    </div>
+    `;
 
-    <!-- Progress bar + week dots row -->
-    <div class="habit-bar-row">
-      <div class="habit-bar-track">
-        <div class="habit-bar-fill" style="width: ${barPct}%"></div>
-      </div>
-      <div class="habit-week">${dotsHTML}</div>
-    </div>
-  `;
+    // DONE BUTTON
+    card
+      .querySelector(".btn-done")
+      .addEventListener(
+        "click",
+        () => {
 
-  // Done button click
-  card.querySelector(".btn-done").addEventListener("click", () => {
-    if (isDone) return; // already done today
-    handleMarkDone(habit.id);
+          const btn =
+            card.querySelector(
+              ".btn-done"
+            );
+
+          if (
+            btn.classList.contains(
+              "completed"
+            )
+          ) {
+            return;
+          }
+
+          btn.classList.add(
+            "completed"
+          );
+
+          btn.textContent =
+            "✓ Done";
+
+          card.classList.add(
+            "done"
+          );
+
+          const streakEl =
+            card.querySelector(
+              ".streak-number"
+            );
+
+          let current =
+            Number(
+              streakEl.textContent
+            ) || 0;
+
+          current++;
+
+          streakEl.textContent =
+            current;
+
+          completed++;
+
+          completedCount.textContent =
+            completed;
+
+          const pct =
+            total > 0
+              ? Math.round(
+                  (
+                    completed /
+                    total
+                  ) * 100
+                )
+              : 0;
+
+          overallBar.style.width =
+            `${pct}%`;
+
+          progressPct.textContent =
+            `${pct}%`;
+
+        }
+      );
+
+    // DELETE BUTTON
+    card
+      .querySelector(".btn-delete")
+      .addEventListener(
+        "click",
+        () => {
+
+          pendingDeleteId =
+            habit.habit_id;
+
+          deleteModal.style.display =
+            "flex";
+
+        }
+      );
+
+    habitsGrid.appendChild(
+      card
+    );
+
   });
 
-  // Delete button click
-  card.querySelector(".btn-delete").addEventListener("click", () => {
-    pendingDeleteId = habit.id;
-    deleteModal.style.display = "flex";
-  });
-
-  return card;
 }
 
-/** Mark a habit as done and re-render */
-function handleMarkDone(habitId) {
-  const user   = currentUser();
-  let habits   = getHabits(user);
-  const idx    = habits.findIndex(h => h.id === habitId);
-  if (idx === -1) return;
+// ────────────────────────────────────────────────
+// ADD HABIT
+// ────────────────────────────────────────────────
 
-  habits[idx] = markDone(habits[idx]);
-  saveHabits(user, habits);
+addTriggerBtn.addEventListener(
+  "click",
+  () => {
 
-  // Animate the card briefly
-  const card = habitsGrid.querySelector(`[data-id="${habitId}"]`);
-  if (card) {
-    card.style.transform = "scale(1.03)";
-    setTimeout(() => { card.style.transform = ""; }, 200);
+    addForm.style.display =
+      "block";
+
+    addTriggerBtn.style.display =
+      "none";
+
   }
+);
 
-  renderHabits();
-}
-
-/** Update summary counts + overall bar */
-function updateSummary(habits, today) {
-  const total     = habits.length;
-  const completed = habits.filter(h => !!h.history[today]).length;
-  completedCount.textContent = completed;
-  totalCount.textContent     = total;
-
-  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  overallBar.style.width  = pct + "%";
-  progressPct.textContent = pct + "%";
-}
-
-/** Escape HTML to prevent XSS */
-function escHtml(s) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-// ─── Add Habit ───────────────────────────────────
-
-addTriggerBtn.addEventListener("click", () => {
-  addTriggerBtn.style.display = "none";
-  addForm.style.display = "block";
-  newHabitName.focus();
-  addError.textContent = "";
-});
-
-addCancelBtn.addEventListener("click", closeAddForm);
+addCancelBtn.addEventListener(
+  "click",
+  closeAddForm
+);
 
 function closeAddForm() {
-  addTriggerBtn.style.display = "flex";
-  addForm.style.display = "none";
+
+  addForm.style.display =
+    "none";
+
+  addTriggerBtn.style.display =
+    "flex";
+
   newHabitName.value = "";
+
   addError.textContent = "";
-  selectedEmoji = "🏃";
-  emojiBtn.textContent = "🏃";
-  emojiDropdown.classList.remove("open");
+
 }
 
-addConfirmBtn.addEventListener("click", handleAddHabit);
-newHabitName.addEventListener("keydown", e => {
-  if (e.key === "Enter") handleAddHabit();
-  if (e.key === "Escape") closeAddForm();
-});
+addConfirmBtn.addEventListener(
+  "click",
+  async () => {
 
-function handleAddHabit() {
-  const name = newHabitName.value.trim();
-  if (!name) {
-    addError.textContent = "Please give your habit a name.";
-    newHabitName.focus();
-    return;
+    const title =
+      newHabitName.value.trim();
+
+    if (!title) {
+
+      addError.textContent =
+        "Enter habit name";
+
+      return;
+    }
+
+    const user =
+      currentUser();
+
+    try {
+
+      const response =
+        await fetch(
+          `${API_URL}/habits`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body: JSON.stringify({
+
+              user_id:
+                user.user_id,
+
+              title
+
+            })
+
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!data.success) {
+
+        addError.textContent =
+          data.error || "Failed";
+
+        return;
+      }
+
+      closeAddForm();
+
+      loadHabits();
+
+    } catch (err) {
+
+      console.error(err);
+
+      addError.textContent =
+        "Server error";
+
+    }
+
   }
+);
 
-  const user   = currentUser();
-  const habits = getHabits(user);
+// ────────────────────────────────────────────────
+// DELETE HABIT
+// ────────────────────────────────────────────────
 
-  // Prevent duplicate names (case-insensitive)
-  if (habits.some(h => h.name.toLowerCase() === name.toLowerCase())) {
-    addError.textContent = "You already have a habit with this name.";
-    return;
+modalCancel.addEventListener(
+  "click",
+  () => {
+
+    deleteModal.style.display =
+      "none";
+
   }
+);
 
-  const newHabit = {
-    id:        uid(),
-    name:      name,
-    emoji:     selectedEmoji,
-    history:   {},
-    streak:    0,
-    createdAt: todayStr(),
-  };
+modalConfirm.addEventListener(
+  "click",
+  async () => {
 
-  habits.push(newHabit);
-  saveHabits(user, habits);
-  closeAddForm();
-  renderHabits();
+    if (!pendingDeleteId)
+      return;
+
+    try {
+
+      await fetch(
+        `${API_URL}/habits/${pendingDeleteId}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      deleteModal.style.display =
+        "none";
+
+      pendingDeleteId = null;
+
+      loadHabits();
+
+    } catch (err) {
+
+      console.error(err);
+
+    }
+
+  }
+);
+
+// ────────────────────────────────────────────────
+// LOGOUT
+// ────────────────────────────────────────────────
+
+function logout() {
+
+  clearSession();
+
+  showPage(authPage);
+
 }
 
-// ─── Emoji Picker ────────────────────────────────
+logoutBtn.addEventListener(
+  "click",
+  logout
+);
 
-emojiBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  emojiDropdown.classList.toggle("open");
-});
+logoutBtnMobile.addEventListener(
+  "click",
+  logout
+);
 
-document.querySelectorAll(".ep-option").forEach(opt => {
-  opt.addEventListener("click", () => {
-    selectedEmoji = opt.dataset.emoji;
-    emojiBtn.textContent = selectedEmoji;
-    emojiDropdown.classList.remove("open");
-  });
-});
-
-// Close emoji dropdown on outside click
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".emoji-picker-wrap")) {
-    emojiDropdown.classList.remove("open");
-  }
-});
-
-// ─── Delete Modal ────────────────────────────────
-
-modalCancel.addEventListener("click", () => {
-  deleteModal.style.display = "none";
-  pendingDeleteId = null;
-});
-
-modalConfirm.addEventListener("click", () => {
-  if (!pendingDeleteId) return;
-  const user   = currentUser();
-  let habits   = getHabits(user);
-  habits       = habits.filter(h => h.id !== pendingDeleteId);
-  saveHabits(user, habits);
-  deleteModal.style.display = "none";
-  pendingDeleteId = null;
-  renderHabits();
-});
-
-// Close modal on overlay click
-deleteModal.addEventListener("click", (e) => {
-  if (e.target === deleteModal) {
-    deleteModal.style.display = "none";
-    pendingDeleteId = null;
-  }
-});
-
-// ─── App Boot ────────────────────────────────────
+// ────────────────────────────────────────────────
+// INIT
+// ────────────────────────────────────────────────
 
 (function init() {
-  const user = currentUser();
+
+  const user =
+    currentUser();
+
   if (user) {
-    // Already logged in — go straight to dashboard
+
     initDashboard();
+
   } else {
+
     showPage(authPage);
+
   }
+
 })();

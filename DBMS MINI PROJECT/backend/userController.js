@@ -1,73 +1,120 @@
 // ─────────────────────────────────────────────────────────
-// controllers/userController.js
-//
-// Business logic for User endpoints.
-// Each function: validates input → queries DB → returns JSON.
+// userController.js
 // ─────────────────────────────────────────────────────────
 
-const db = require("../config/db");
-const { createError } = require("../middleware/errorHandler");
+const db = require("./config/db");
+const { createError } = require("./middleware/errorHandler");
 
 /**
  * POST /register
- * Body: { name, email }
- * Creates a new user. Email must be unique.
+ * Body: { name, email, password }
  */
 async function registerUser(req, res, next) {
   try {
-    const { name, email } = req.body;
 
-    // ── Validation ────────────────────────────────────
-    if (!name || !email) {
-      throw createError(400, "Both 'name' and 'email' are required.");
+    const { name, email, password } = req.body;
+
+    // Validation
+    if (!name || !email || !password) {
+      throw createError(
+        400,
+        "Name, email and password are required."
+      );
     }
-    if (typeof name !== "string" || name.trim().length < 2) {
-      throw createError(400, "Name must be at least 2 characters.");
-    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (!emailRegex.test(email)) {
-      throw createError(400, "Please provide a valid email address.");
+      throw createError(400, "Please enter valid email.");
     }
 
-    // ── Insert ────────────────────────────────────────
+    // Insert user
     const [result] = await db.execute(
-      "INSERT INTO users (name, email) VALUES (?, ?)",
-      [name.trim(), email.trim().toLowerCase()]
+      "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
+      [
+        name.trim(),
+        email.trim().toLowerCase(),
+        password
+      ]
     );
 
     res.status(201).json({
       success: true,
-      message: "User registered successfully.",
+      message: "User registered successfully",
       data: {
         user_id: result.insertId,
-        name:    name.trim(),
-        email:   email.trim().toLowerCase(),
+        name,
+        email,
       },
     });
+
   } catch (err) {
-    // MySQL duplicate entry error code
+
     if (err.code === "ER_DUP_ENTRY") {
-      return next(createError(409, "An account with this email already exists."));
+      return next(
+        createError(409, "Email already exists.")
+      );
     }
+
+    next(err);
+  }
+}
+
+/**
+ * POST /login
+ * Body: { email, password }
+ */
+async function loginUser(req, res, next) {
+  try {
+
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      throw createError(
+        400,
+        "Email and password required."
+      );
+    }
+
+    const [rows] = await db.execute(
+      "SELECT * FROM users WHERE email = ? AND password = ?",
+      [email, password]
+    );
+
+    if (rows.length === 0) {
+      throw createError(
+        401,
+        "Invalid email or password"
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      user: rows[0],
+    });
+
+  } catch (err) {
     next(err);
   }
 }
 
 /**
  * GET /users
- * Returns all users (without sensitive fields).
  */
 async function getAllUsers(req, res, next) {
   try {
+
     const [rows] = await db.execute(
       "SELECT user_id, name, email, created_at FROM users ORDER BY created_at DESC"
     );
 
     res.json({
       success: true,
-      count:   rows.length,
-      data:    rows,
+      count: rows.length,
+      data: rows,
     });
+
   } catch (err) {
     next(err);
   }
@@ -75,10 +122,10 @@ async function getAllUsers(req, res, next) {
 
 /**
  * GET /users/:user_id
- * Returns a single user by ID.
  */
 async function getUserById(req, res, next) {
   try {
+
     const { user_id } = req.params;
 
     const [rows] = await db.execute(
@@ -87,13 +134,25 @@ async function getUserById(req, res, next) {
     );
 
     if (rows.length === 0) {
-      throw createError(404, `User with ID ${user_id} not found.`);
+      throw createError(
+        404,
+        `User with ID ${user_id} not found.`
+      );
     }
 
-    res.json({ success: true, data: rows[0] });
+    res.json({
+      success: true,
+      data: rows[0],
+    });
+
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { registerUser, getAllUsers, getUserById };
+module.exports = {
+  registerUser,
+  loginUser,
+  getAllUsers,
+  getUserById,
+};

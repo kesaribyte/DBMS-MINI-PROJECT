@@ -4,7 +4,7 @@
 
 const express = require("express");
 const router  = express.Router();
-const { markHabitDone, getHabitLog, getHabitWeek } = require("../controllers/logController");
+const { markHabitDone, getHabitLog, getHabitWeek } = require("./logController");
 
 // POST /log                    — mark a habit as done
 router.post("/log", markHabitDone);

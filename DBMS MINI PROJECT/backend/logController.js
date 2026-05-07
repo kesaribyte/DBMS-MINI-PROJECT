@@ -4,10 +4,9 @@
 // Business logic for Habit Log endpoints.
 // ─────────────────────────────────────────────────────────
 
-const db = require("../config/db");
-const { createError } = require("../middleware/errorHandler");
-const { calcStreak, calcBestStreak, toDateStr } = require("../utils/streak");
-
+const db = require("./config/db");
+const { createError } = require("./middleware/errorHandler");
+const { calcStreak, calcBestStreak, toDateStr } = require("./utils/streak");
 /**
  * POST /log
  * Body: { habit_id, date? }

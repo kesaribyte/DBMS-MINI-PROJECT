@@ -3,16 +3,25 @@
 // ─────────────────────────────────────────────────────────
 
 const express = require("express");
-const router  = express.Router();
-const { registerUser, getAllUsers, getUserById } = require("../controllers/userController");
+const router = express.Router();
 
-// POST /register  — create a new user
+const {
+  registerUser,
+  loginUser,
+  getAllUsers,
+  getUserById
+} = require("./userController");
+
+// Register user
 router.post("/register", registerUser);
 
-// GET  /users     — list all users
+// Login user
+router.post("/login", loginUser);
+
+// Get all users
 router.get("/users", getAllUsers);
 
-// GET  /users/:user_id  — get a single user
+// Get single user
 router.get("/users/:user_id", getUserById);
 
 module.exports = router;

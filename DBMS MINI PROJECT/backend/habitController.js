@@ -1,147 +1,196 @@
 // ─────────────────────────────────────────────────────────
-// controllers/habitController.js
+// habitController.js
 //
-// Business logic for Habit endpoints.
+// Keeps OLD UI working with NEW database structure
 // ─────────────────────────────────────────────────────────
 
-const db = require("../config/db");
-const { createError } = require("../middleware/errorHandler");
-const { calcStreak, calcBestStreak } = require("../utils/streak");
+const db = require("./config/db");
 
-/**
- * POST /habits
- * Body: { user_id, habit_name, emoji? }
- * Creates a new habit for a user.
- */
-async function addHabit(req, res, next) {
+// ─────────────────────────────────────────────────────────
+// ADD HABIT
+// POST /habits
+// ─────────────────────────────────────────────────────────
+
+async function addHabit(req, res) {
+
   try {
-    const { user_id, habit_name, emoji = "🏃" } = req.body;
 
-    // ── Validation ────────────────────────────────────
-    if (!user_id || !habit_name) {
-      throw createError(400, "'user_id' and 'habit_name' are required.");
-    }
-    if (habit_name.trim().length < 2) {
-      throw createError(400, "Habit name must be at least 2 characters.");
-    }
+    const { user_id, title } = req.body;
 
-    // Check the user exists
-    const [users] = await db.execute(
-      "SELECT user_id FROM users WHERE user_id = ?",
-      [user_id]
-    );
-    if (users.length === 0) {
-      throw createError(404, `User with ID ${user_id} not found.`);
+    // Validation
+    if (!user_id || !title) {
+
+      return res.status(400).json({
+        success: false,
+        error: "user_id and title are required"
+      });
+
     }
 
-    // ── Insert ────────────────────────────────────────
+    // Insert habit
     const [result] = await db.execute(
-      "INSERT INTO habits (user_id, habit_name, emoji) VALUES (?, ?, ?)",
-      [user_id, habit_name.trim(), emoji]
+      "INSERT INTO habits (user_id, title) VALUES (?, ?)",
+      [user_id, title]
     );
 
+    // Return OLD UI format
     res.status(201).json({
+
       success: true,
-      message: "Habit created successfully.",
+
+      message: "Habit created successfully",
+
       data: {
-        habit_id:   result.insertId,
-        user_id:    Number(user_id),
-        habit_name: habit_name.trim(),
-        emoji,
-      },
+
+        habit_id: result.insertId,
+        user_id: Number(user_id),
+
+        habit_name: title,
+
+        emoji: "🌿",
+
+        streak: 0,
+        best_streak: 0,
+        done_today: false
+
+      }
+
     });
+
   } catch (err) {
-    next(err);
+
+    console.error(err);
+
+    res.status(500).json({
+
+      success: false,
+      error: err.message
+
+    });
+
   }
+
 }
 
-/**
- * GET /habits/:user_id
- * Returns all habits for a user, each with current streak info.
- */
-async function getHabitsByUser(req, res, next) {
+// ─────────────────────────────────────────────────────────
+// GET HABITS
+// GET /habits/:user_id
+// ─────────────────────────────────────────────────────────
+
+async function getHabitsByUser(req, res) {
+
   try {
+
     const { user_id } = req.params;
 
-    // Verify user exists
-    const [users] = await db.execute(
-      "SELECT user_id, name FROM users WHERE user_id = ?",
+    // Get habits
+    const [rows] = await db.execute(
+
+      "SELECT * FROM habits WHERE user_id = ? ORDER BY created_at DESC",
+
       [user_id]
-    );
-    if (users.length === 0) {
-      throw createError(404, `User with ID ${user_id} not found.`);
-    }
 
-    // Fetch all habits for the user
-    const [habits] = await db.execute(
-      "SELECT habit_id, habit_name, emoji, created_at FROM habits WHERE user_id = ? ORDER BY created_at ASC",
-      [user_id]
     );
 
-    // For each habit, load its log and compute streak
-    const habitsWithStreak = await Promise.all(
-      habits.map(async (habit) => {
-        const [logs] = await db.execute(
-          "SELECT log_date, status FROM habit_log WHERE habit_id = ? ORDER BY log_date DESC",
-          [habit.habit_id]
-        );
+    // Convert DB columns → OLD UI structure
+    const habits = rows.map(habit => ({
 
-        const streak     = calcStreak(logs);
-        const bestStreak = calcBestStreak(logs);
-        const today      = new Date().toISOString().slice(0, 10);
-        const doneToday  = logs.some(
-          (l) => l.log_date?.toISOString?.().slice(0, 10) === today ||
-                 String(l.log_date).slice(0, 10) === today
-        );
+      habit_id: habit.id,
 
-        return {
-          ...habit,
-          streak,
-          best_streak: bestStreak,
-          done_today:  doneToday,
-          total_days:  logs.filter((l) => l.status === "done").length,
-        };
-      })
-    );
+      user_id: habit.user_id,
+
+      habit_name: habit.title,
+
+      emoji: "🌿",
+
+      streak: 0,
+
+      best_streak: 0,
+
+      done_today: false,
+
+      created_at: habit.created_at
+
+    }));
 
     res.json({
+
       success: true,
-      user:    users[0],
-      count:   habitsWithStreak.length,
-      data:    habitsWithStreak,
+
+      count: habits.length,
+
+      data: habits
+
     });
+
   } catch (err) {
-    next(err);
+
+    console.error(err);
+
+    res.status(500).json({
+
+      success: false,
+
+      error: err.message
+
+    });
+
   }
+
 }
 
-/**
- * DELETE /habits/:id
- * Deletes a habit and all its logs (CASCADE handles logs).
- */
-async function deleteHabit(req, res, next) {
+// ─────────────────────────────────────────────────────────
+// DELETE HABIT
+// DELETE /habits/:id
+// ─────────────────────────────────────────────────────────
+
+async function deleteHabit(req, res) {
+
   try {
+
     const { id } = req.params;
 
-    // Check it exists before deleting
-    const [rows] = await db.execute(
-      "SELECT habit_id, habit_name FROM habits WHERE habit_id = ?",
-      [id]
-    );
-    if (rows.length === 0) {
-      throw createError(404, `Habit with ID ${id} not found.`);
-    }
+    // Delete habit
+    await db.execute(
 
-    await db.execute("DELETE FROM habits WHERE habit_id = ?", [id]);
+      "DELETE FROM habits WHERE id = ?",
+
+      [id]
+
+    );
 
     res.json({
+
       success: true,
-      message: `Habit "${rows[0].habit_name}" deleted successfully.`,
-      deleted_id: Number(id),
+
+      message: "Habit deleted successfully"
+
     });
+
   } catch (err) {
-    next(err);
+
+    console.error(err);
+
+    res.status(500).json({
+
+      success: false,
+
+      error: err.message
+
+    });
+
   }
+
 }
 
-module.exports = { addHabit, getHabitsByUser, deleteHabit };
+// ─────────────────────────────────────────────────────────
+
+module.exports = {
+
+  addHabit,
+
+  getHabitsByUser,
+
+  deleteHabit
+
+};

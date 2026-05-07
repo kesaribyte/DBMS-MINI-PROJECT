@@ -1,99 +1,85 @@
 // ═══════════════════════════════════════════════════════════
 //  server.js  —  Habit Tracker API Entry Point
-//
-//  Start dev server:  npm run dev
-//  Start prod server: npm start
 // ═══════════════════════════════════════════════════════════
 
 "use strict";
 
 const express = require("express");
-const cors    = require("cors");
+const cors = require("cors");
 require("dotenv").config();
 
 // ── Import route modules ─────────────────────────────────
-const userRoutes  = require("./routes/userRoutes");
-const habitRoutes = require("./routes/habitRoutes");
-const logRoutes   = require("./routes/logRoutes");
+const userRoutes = require("./userRoutes");
+const habitRoutes = require("./habitRoutes");
+const logRoutes = require("./logRoutes");
 
 // ── Import error handler ─────────────────────────────────
 const { errorHandler } = require("./middleware/errorHandler");
 
 // ── Create Express app ───────────────────────────────────
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ════════════════════════════════════════════════════════
-//  MIDDLEWARE
+// MIDDLEWARE
 // ════════════════════════════════════════════════════════
 
-// CORS — allow requests from your frontend origin
-app.use(cors({
-  origin: [
-    "http://localhost:5500",   // VS Code Live Server (default)
-    "http://127.0.0.1:5500",
-    "http://localhost:3001",   // if you run a dev server on 3001
-    // Add your production frontend URL here, e.g.:
-    // "https://my-habit-app.vercel.app"
-  ],
-  methods:     ["GET", "POST", "DELETE", "PATCH", "OPTIONS"],
-  credentials: true,
-}));
+// Enable CORS
+app.use(cors());
 
-// Parse incoming JSON bodies
+// Parse JSON
 app.use(express.json());
 
-// Parse URL-encoded form bodies (optional but useful)
+// Parse form data
 app.use(express.urlencoded({ extended: true }));
 
-// Simple request logger (dev-friendly)
-app.use((req, _res, next) => {
-  const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-  console.log(`[${ts}]  ${req.method.padEnd(6)} ${req.path}`);
+// Request Logger
+app.use((req, res, next) => {
+  const time = new Date().toLocaleString();
+  console.log(`[${time}] ${req.method} ${req.url}`);
   next();
 });
 
 // ════════════════════════════════════════════════════════
-//  ROUTES
+// ROUTES
 // ════════════════════════════════════════════════════════
 
-// Health check — useful for deployment platforms
-app.get("/", (_req, res) => {
+// Home Route
+app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "🌿 Habit Tracker API is running",
-    version: "1.0.0",
-    endpoints: {
-      users:  ["POST /register", "GET /users", "GET /users/:user_id"],
-      habits: ["POST /habits", "GET /habits/:user_id", "DELETE /habits/:id"],
-      logs:   ["POST /log", "GET /log/:habit_id", "GET /log/:habit_id/week"],
-    },
+    message: "🌿 Habit Tracker API Running Successfully",
   });
 });
 
-// Mount route groups
-app.use("/", userRoutes);   // /register, /users
-app.use("/", habitRoutes);  // /habits
-app.use("/", logRoutes);    // /log
+// API Routes
+app.use("/", userRoutes);
+app.use("/", habitRoutes);
+app.use("/", logRoutes);
 
-// ── 404 handler — must be AFTER all routes ───────────────
-app.use((_req, res) => {
+// ════════════════════════════════════════════════════════
+// 404 Route
+// ════════════════════════════════════════════════════════
+
+app.use((req, res) => {
   res.status(404).json({
     success: false,
-    error:   "Endpoint not found. Check the API docs at GET /",
+    message: "Route not found",
   });
 });
 
-// ── Global error handler — must be LAST ─────────────────
+// ════════════════════════════════════════════════════════
+// Error Handler
+// ════════════════════════════════════════════════════════
+
 app.use(errorHandler);
 
 // ════════════════════════════════════════════════════════
-//  START SERVER
+// START SERVER
 // ════════════════════════════════════════════════════════
+
 app.listen(PORT, () => {
-  console.log(`\n🌿  Habit Tracker API`);
-  console.log(`    Listening on   http://localhost:${PORT}`);
-  console.log(`    Environment:   ${process.env.NODE_ENV || "development"}\n`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
 
-module.exports = app; // exported for testing
+module.exports = app;
